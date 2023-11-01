@@ -1,3 +1,5 @@
+use std::{io, path::Path, sync::Arc};
+
 use iced::{
     executor,
     widget::{column, container, horizontal_space, row, text, text_editor},
@@ -15,6 +17,7 @@ struct Editor {
 #[derive(Debug, Clone)]
 enum Message {
     EditText(text_editor::Action),
+    FileOpened(Result<Arc<String>, io::ErrorKind>),
 }
 
 impl Application for Editor {
@@ -26,9 +29,12 @@ impl Application for Editor {
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         (
             Self {
-                content: text_editor::Content::with(include_str!("main.rs")),
+                content: text_editor::Content::new(),
             },
-            Command::none(),
+            Command::perform(
+                load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
+                Message::FileOpened,
+            ),
         )
     }
 
@@ -39,6 +45,11 @@ impl Application for Editor {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::EditText(action) => self.content.edit(action),
+            Message::FileOpened(result) => {
+                if let Ok(content) = result {
+                    self.content = text_editor::Content::with(&content);
+                }
+            }
         }
 
         Command::none()
@@ -62,4 +73,11 @@ impl Application for Editor {
     fn theme(&self) -> iced::Theme {
         Theme::Dark
     }
+}
+
+async fn load_file(path: impl AsRef<Path>) -> Result<Arc<String>, io::ErrorKind> {
+    tokio::fs::read_to_string(path)
+        .await
+        .map(Arc::new)
+        .map_err(|err| err.kind())
 }

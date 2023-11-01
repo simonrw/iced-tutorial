@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 iced = { git = "https://github.com/iced-rs/iced", rev = "refs/tags/text-editor", features = [ "debug" ] }
+tokio = { version = "1.33.0", features = ["full"] }
