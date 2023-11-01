@@ -2,7 +2,7 @@ use std::{io, path::Path, sync::Arc};
 
 use iced::{
     executor,
-    widget::{column, container, horizontal_space, row, text, text_editor},
+    widget::{button, column, container, horizontal_space, row, text, text_editor},
     Application, Command, Element, Length, Settings, Theme,
 };
 
@@ -12,12 +12,14 @@ fn main() -> iced::Result {
 
 struct Editor {
     content: text_editor::Content,
+    error: Option<Error>,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     EditText(text_editor::Action),
-    FileOpened(Result<Arc<String>, io::ErrorKind>),
+    FileOpened(Result<Arc<String>, Error>),
+    Open,
 }
 
 impl Application for Editor {
@@ -30,6 +32,7 @@ impl Application for Editor {
         (
             Self {
                 content: text_editor::Content::new(),
+                error: None,
             },
             Command::perform(
                 load_file(format!("{}/src/main.rs", env!("CARGO_MANIFEST_DIR"))),
@@ -45,11 +48,12 @@ impl Application for Editor {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::EditText(action) => self.content.edit(action),
-            Message::FileOpened(result) => {
-                if let Ok(content) = result {
-                    self.content = text_editor::Content::with(&content);
-                }
+            Message::FileOpened(Ok(content)) => {
+                self.content = text_editor::Content::with(&content);
+                self.error = None;
             }
+            Message::FileOpened(Err(e)) => self.error = Some(e),
+            Message::Open => return Command::perform(pick_file(), Message::FileOpened),
         }
 
         Command::none()
@@ -65,7 +69,9 @@ impl Application for Editor {
 
         let status_bar = row![horizontal_space(Length::Fill), position];
 
-        container(column![input, status_bar].spacing(10))
+        let controls = row![button("Open").on_press(Message::Open)];
+
+        container(column![controls, input, status_bar].spacing(10))
             .padding(10)
             .into()
     }
@@ -75,9 +81,25 @@ impl Application for Editor {
     }
 }
 
-async fn load_file(path: impl AsRef<Path>) -> Result<Arc<String>, io::ErrorKind> {
+async fn pick_file() -> Result<Arc<String>, Error> {
+    let handle = rfd::AsyncFileDialog::new()
+        .set_title("Choose a file")
+        .pick_file()
+        .await
+        .ok_or(Error::DialogClosed)?;
+    load_file(handle.path()).await
+}
+
+async fn load_file(path: impl AsRef<Path>) -> Result<Arc<String>, Error> {
     tokio::fs::read_to_string(path)
         .await
         .map(Arc::new)
         .map_err(|err| err.kind())
+        .map_err(Error::IO)
+}
+
+#[derive(Debug, Clone)]
+enum Error {
+    DialogClosed,
+    IO(io::ErrorKind),
 }
