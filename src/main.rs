@@ -27,7 +27,7 @@ enum Message {
     Open,
     New,
     Save,
-    FileSaved(Result<(), Error>),
+    FileSaved(Result<PathBuf, Error>),
 }
 
 impl Application for Editor {
@@ -77,7 +77,10 @@ impl Application for Editor {
                 save_file(self.content.text(), self.path.clone()),
                 Message::FileSaved,
             ),
-            Message::FileSaved(Ok(_)) => Command::none(),
+            Message::FileSaved(Ok(path)) => {
+                self.path = Some(path);
+                Command::none()
+            }
             Message::FileSaved(Err(e)) => {
                 self.error = Some(e);
                 Command::none()
@@ -140,7 +143,7 @@ async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
     Ok((path, contents))
 }
 
-async fn save_file(contents: String, path: Option<PathBuf>) -> Result<(), Error> {
+async fn save_file(contents: String, path: Option<PathBuf>) -> Result<PathBuf, Error> {
     let path = if let Some(path) = path {
         path
     } else {
@@ -151,10 +154,11 @@ async fn save_file(contents: String, path: Option<PathBuf>) -> Result<(), Error>
             .ok_or(Error::DialogClosed)
             .map(|path| path.path().to_path_buf())?
     };
-    tokio::fs::write(path, contents.into_bytes())
+    tokio::fs::write(&path, contents.into_bytes())
         .await
         .map_err(|err| err.kind())
-        .map_err(Error::IO)
+        .map_err(Error::IO)?;
+    Ok(path)
 }
 
 #[derive(Debug, Clone)]
