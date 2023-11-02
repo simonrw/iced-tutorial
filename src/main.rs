@@ -6,7 +6,7 @@ use std::{
 
 use iced::{
     executor,
-    widget::{button, column, container, horizontal_space, row, text, text_editor},
+    widget::{button, column, container, horizontal_space, row, text, text_editor, tooltip},
     Application, Command, Element, Length, Settings, Theme,
 };
 
@@ -110,10 +110,11 @@ impl Application for Editor {
         };
 
         let controls = row![
-            button("New").on_press(Message::New),
-            button("Open").on_press(Message::Open),
-            button("Save").on_press(Message::Save),
-        ];
+            action("New", "New file", Message::New),
+            action("Open", "Open a file", Message::Open),
+            action("Save", "Save the file", Message::Save),
+        ]
+        .spacing(10);
 
         container(column![controls, input, status_bar].spacing(10))
             .padding(10)
@@ -123,6 +124,21 @@ impl Application for Editor {
     fn theme(&self) -> iced::Theme {
         Theme::Dark
     }
+}
+
+fn action<'a>(
+    content: impl Into<Element<'a, Message>>,
+    label: &str,
+    on_press: Message,
+) -> Element<'a, Message> {
+    tooltip(
+        button(container(content.into()).width(30).center_x())
+            .on_press(on_press)
+            .padding([5, 10]),
+        label,
+        tooltip::Position::FollowCursor,
+    )
+    .into()
 }
 
 async fn pick_file() -> Result<(PathBuf, Arc<String>), Error> {
