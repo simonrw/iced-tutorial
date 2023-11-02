@@ -141,14 +141,20 @@ async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
 }
 
 async fn save_file(contents: String, path: Option<PathBuf>) -> Result<(), Error> {
-    if let Some(path) = path {
-        tokio::fs::write(path, contents.into_bytes())
-            .await
-            .map_err(|err| err.kind())
-            .map_err(Error::IO)
+    let path = if let Some(path) = path {
+        path
     } else {
-        Ok(())
-    }
+        rfd::AsyncFileDialog::new()
+            .set_title("Choose a file name")
+            .save_file()
+            .await
+            .ok_or(Error::DialogClosed)
+            .map(|path| path.path().to_path_buf())?
+    };
+    tokio::fs::write(path, contents.into_bytes())
+        .await
+        .map_err(|err| err.kind())
+        .map_err(Error::IO)
 }
 
 #[derive(Debug, Clone)]
