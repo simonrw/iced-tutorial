@@ -23,6 +23,7 @@ struct Editor {
     path: Option<PathBuf>,
     content: text_editor::Content,
     error: Option<Error>,
+    is_dirty: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,7 @@ impl Application for Editor {
                 path: None,
                 content: text_editor::Content::new(),
                 error: None,
+                is_dirty: true,
             },
             Command::perform(load_file(default_file()), Message::FileOpened),
         )
@@ -59,10 +61,12 @@ impl Application for Editor {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::EditText(action) => {
+                self.is_dirty = self.is_dirty || action.is_edit();
                 self.content.edit(action);
                 Command::none()
             }
             Message::FileOpened(Ok((path, content))) => {
+                self.is_dirty = false;
                 self.path = Some(path);
                 self.content = text_editor::Content::with(&content);
                 self.error = None;
@@ -75,6 +79,7 @@ impl Application for Editor {
             Message::Open => Command::perform(pick_file(), Message::FileOpened),
             Message::New => {
                 self.path = None;
+                self.is_dirty = true;
                 self.content = text_editor::Content::new();
                 Command::none()
             }
@@ -84,6 +89,7 @@ impl Application for Editor {
             ),
             Message::FileSaved(Ok(path)) => {
                 self.path = Some(path);
+                self.is_dirty = false;
                 Command::none()
             }
             Message::FileSaved(Err(e)) => {
@@ -128,9 +134,13 @@ impl Application for Editor {
         };
 
         let controls = row![
-            action("New", "New file", Message::New),
-            action("Open", "Open a file", Message::Open),
-            action("Save", "Save the file", Message::Save),
+            action("New", "New file", Some(Message::New)),
+            action("Open", "Open a file", Some(Message::Open)),
+            action(
+                "Save",
+                "Save the file",
+                self.is_dirty.then_some(Message::Save)
+            ),
         ]
         .spacing(10);
 
@@ -147,12 +157,18 @@ impl Application for Editor {
 fn action<'a>(
     content: impl Into<Element<'a, Message>>,
     label: &str,
-    on_press: Message,
+    on_press: Option<Message>,
 ) -> Element<'a, Message> {
+    let is_disabled = on_press.is_none();
     tooltip(
         button(container(content.into()).width(30).center_x())
-            .on_press(on_press)
-            .padding([5, 10]),
+            .on_press_maybe(on_press)
+            .padding([5, 10])
+            .style(if is_disabled {
+                theme::Button::Secondary
+            } else {
+                theme::Button::Primary
+            }),
         label,
         tooltip::Position::FollowCursor,
     )
