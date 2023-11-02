@@ -6,12 +6,17 @@ use std::{
 
 use iced::{
     executor,
+    highlighter::{self, Highlighter},
+    theme,
     widget::{button, column, container, horizontal_space, row, text, text_editor, tooltip},
-    Application, Command, Element, Length, Settings, Theme,
+    Application, Command, Element, Font, Length, Settings, Theme,
 };
 
 fn main() -> iced::Result {
-    Editor::run(Settings::default())
+    Editor::run(Settings {
+        default_font: Font::MONOSPACE,
+        ..Default::default()
+    })
 }
 
 struct Editor {
@@ -89,7 +94,20 @@ impl Application for Editor {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let input = text_editor(&self.content).on_edit(Message::EditText);
+        let input = text_editor(&self.content)
+            .on_edit(Message::EditText)
+            .highlight::<Highlighter>(
+                highlighter::Settings {
+                    theme: highlighter::Theme::SolarizedDark,
+                    extension: self
+                        .path
+                        .as_ref()
+                        .and_then(|path| path.extension()?.to_str())
+                        .unwrap_or("rs")
+                        .to_string(),
+                },
+                |highlight, _theme| highlight.to_format(),
+            );
 
         let status_bar = {
             let status = if let Some(Error::IO(error)) = self.error.as_ref() {
@@ -138,6 +156,7 @@ fn action<'a>(
         label,
         tooltip::Position::FollowCursor,
     )
+    .style(theme::Container::Box)
     .into()
 }
 
