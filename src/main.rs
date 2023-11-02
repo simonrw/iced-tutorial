@@ -26,6 +26,8 @@ enum Message {
     FileOpened(Result<(PathBuf, Arc<String>), Error>),
     Open,
     New,
+    Save,
+    FileSaved(Result<(), Error>),
 }
 
 impl Application for Editor {
@@ -71,6 +73,15 @@ impl Application for Editor {
                 self.content = text_editor::Content::new();
                 Command::none()
             }
+            Message::Save => Command::perform(
+                save_file(self.content.text(), self.path.clone()),
+                Message::FileSaved,
+            ),
+            Message::FileSaved(Ok(_)) => Command::none(),
+            Message::FileSaved(Err(e)) => {
+                self.error = Some(e);
+                Command::none()
+            }
         }
     }
 
@@ -97,7 +108,8 @@ impl Application for Editor {
 
         let controls = row![
             button("New").on_press(Message::New),
-            button("Open").on_press(Message::Open)
+            button("Open").on_press(Message::Open),
+            button("Save").on_press(Message::Save),
         ];
 
         container(column![controls, input, status_bar].spacing(10))
@@ -126,6 +138,17 @@ async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), Error> {
         .map_err(|err| err.kind())
         .map_err(Error::IO)?;
     Ok((path, contents))
+}
+
+async fn save_file(contents: String, path: Option<PathBuf>) -> Result<(), Error> {
+    if let Some(path) = path {
+        tokio::fs::write(path, contents.into_bytes())
+            .await
+            .map_err(|err| err.kind())
+            .map_err(Error::IO)
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
